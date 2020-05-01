@@ -65,11 +65,13 @@ class MiscaleWorker(BaseWorker):
                         "basal_metabolism": float("{:.2f}".format(lib.getBMR())),
                         "visceral_fat": float("{:.2f}".format(lib.getVisceralFat())),
                         "user": user,
+                        "age": age,
+                        "sex": sex,
                         "ideal_weight": float("{:.2f}".format(lib.getIdealWeight())),
-                        "ideal_weight_scale": float("{:.2f}".format(lib.getIdealWeightScale())),
-                        "bmi_scale": float("{:.2f}".format(lib.getBMIScale()))
-                        "basal_metabolism_scale": float("{:.2f}".format(lib.getBMRScale())),
-                        "visceral_fat_scale": float("{:.2f}".format(lib.getVisceralFatScale())),
+                        "ideal_weight_scale": lib.getIdealWeightScale(),
+                        "bmi_scale": lib.getBMIScale(),
+                        "basal_metabolism_scale": lib.getBMRScale(),
+                        "visceral_fat_scale": lib.getVisceralFatScale(),
                     }
 
                     if results.impedance:
@@ -83,21 +85,21 @@ class MiscaleWorker(BaseWorker):
                         metrics["body_fat"] = float(
                             "{:.2f}".format(lib.getFatPercentage())
                         )
-                        metrics["body_fat_scale"] = float("{:.2f}".format(lib.getFatPercentageScale()))
+                        metrics["body_fat_scale"] = lib.getFatPercentageScale()
                         metrics["water"] = float(
                             "{:.2f}".format(lib.getWaterPercentage())
                         )
-                        metrics["water_scale"] = float("{:.2f}".format(lib.getWaterPercentageScale()))
+                        metrics["water_scale"] = lib.getWaterPercentageScale()
                         metrics["bone_mass"] = float("{:.2f}".format(lib.getBoneMass()))
-                        metrics["bone_mass_scale"] = float("{:.2f}".format(lib.getBoneMassScale()))
+                        metrics["bone_mass_scale"] = lib.getBoneMassScale()
                         metrics["muscle_mass"] = float(
                             "{:.2f}".format(lib.getMuscleMass())
                         )
-                        metrics["muscle_mass_scale"] = float("{:.2f}".format(lib.getMuscleMassScale()))
+                        metrics["muscle_mass_scale"] = lib.getMuscleMassScale()
                         metrics["protein"] = float(
                             "{:.2f}".format(lib.getProteinPercentage())
                         )
-                        metrics["protein_scale"] = float("{:.2f}".format(lib.getProteinPercentageScale()))
+                        metrics["protein_scale"] = lib.getProteinPercentageScale()
                         metrics["body_type"] = lib.getBodyTypeScale()[lib.getBodyType()]
                         metrics["fat_mass_to_ideal"] = lib.getFatMassToIdeal()
 
@@ -417,6 +419,7 @@ class bodyMetrics:
         for scale in scales:
             if self.age >= scale["min"] and self.age <= scale["max"]:
                 return scale[self.sex]
+        return scales[0][self.sex]
 
     # Get water percentage
     def getWaterPercentage(self):
