@@ -65,6 +65,11 @@ class MiscaleWorker(BaseWorker):
                         "basal_metabolism": float("{:.2f}".format(lib.getBMR())),
                         "visceral_fat": float("{:.2f}".format(lib.getVisceralFat())),
                         "user": user,
+                        "ideal_weight": float("{:.2f}".format(lib.getIdealWeight())),
+                        "ideal_weight_scale": float("{:.2f}".format(lib.getIdealWeightScale())),
+                        "bmi_scale": float("{:.2f}".format(lib.getBMIScale()))
+                        "basal_metabolism_scale": float("{:.2f}".format(lib.getBMRScale())),
+                        "visceral_fat_scale": float("{:.2f}".format(lib.getVisceralFatScale())),
                     }
 
                     if results.impedance:
@@ -78,16 +83,23 @@ class MiscaleWorker(BaseWorker):
                         metrics["body_fat"] = float(
                             "{:.2f}".format(lib.getFatPercentage())
                         )
+                        metrics["body_fat_scale"] = float("{:.2f}".format(lib.getFatPercentageScale()))
                         metrics["water"] = float(
                             "{:.2f}".format(lib.getWaterPercentage())
                         )
+                        metrics["water_scale"] = float("{:.2f}".format(lib.getWaterPercentageScale()))
                         metrics["bone_mass"] = float("{:.2f}".format(lib.getBoneMass()))
+                        metrics["bone_mass_scale"] = float("{:.2f}".format(lib.getBoneMassScale()))
                         metrics["muscle_mass"] = float(
                             "{:.2f}".format(lib.getMuscleMass())
                         )
+                        metrics["muscle_mass_scale"] = float("{:.2f}".format(lib.getMuscleMassScale()))
                         metrics["protein"] = float(
                             "{:.2f}".format(lib.getProteinPercentage())
                         )
+                        metrics["protein_scale"] = float("{:.2f}".format(lib.getProteinPercentageScale()))
+                        metrics["body_type"] = lib.getBodyTypeScale()[lib.getBodyType()]
+                        metrics["fat_mass_to_ideal"] = lib.getFatMassToIdeal()
 
                     if results.midatetime:
                         metrics["timestamp"] = results.midatetime
@@ -180,7 +192,9 @@ class ScanProcessor:
 
                     self.results.weight = round(measured, 2)
                     self.results.unit = unit
-                    self.results.impedance = int((data[24:26] + data[22:24]), 16)
+                    self.results.impedance = int(data[22:24], 16)
+                    if data[24:26] != 'ff':
+                        self.results.impedance += int(data[24:26], 16)
                     self.results.midatetime = str(midatetime)
 
                     self.ready = True
