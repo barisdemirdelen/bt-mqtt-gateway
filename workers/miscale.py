@@ -67,7 +67,6 @@ class MiscaleWorker(BaseWorker):
                         results.impedance,
                     )
                     metrics_dict = metrics.get_metrics_dict()
-                    metrics_dict["user"] = user
 
                     if results.mi_datetime:
                         metrics_dict["timestamp"] = results.mi_datetime
@@ -545,7 +544,6 @@ class BodyMetrics:
             "basal_metabolism": round(self.get_bmr(), 2),
             "visceral_fat": round(self.get_visceral_fat(), 2),
             "age": round(self.age, 2),
-            "sex": self.sex,
             "ideal_weight": round(self.get_ideal_weight(), 2),
             "ideal_weight_scale": self._round_elements(self.get_ideal_weight_scale()),
             "bmi_scale": self._round_elements(self.get_bmi_scale()),
