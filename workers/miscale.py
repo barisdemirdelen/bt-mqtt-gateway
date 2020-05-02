@@ -19,10 +19,10 @@ class MiscaleWorker(BaseWorker):
 
     SCAN_TIMEOUT = 5
 
-    def getAge(self, d1):
-        d1 = datetime.strptime(str(d1), "%Y-%m-%d")
-        d2 = datetime.strptime(datetime.today().strftime("%Y-%m-%d"), "%Y-%m-%d")
-        return abs((d2 - d1).days) / 365
+    def __init__(self, command_timeout, global_topic_prefix, **kwargs):
+        self.mac = None
+        self.users = None
+        super().__init__(command_timeout, global_topic_prefix, **kwargs)
 
     def status_update(self):
         results = self._get_data()
@@ -39,14 +39,14 @@ class MiscaleWorker(BaseWorker):
                     topic=self.format_topic("impedance"), payload=results.impedance
                 )
             )
-        if results.midatetime:
+        if results.mi_datetime:
             messages.append(
                 MqttMessage(
-                    topic=self.format_topic("midatetime"), payload=results.midatetime
+                    topic=self.format_topic("midatetime"), payload=results.mi_datetime
                 )
             )
 
-        if hasattr(self, "users"):
+        if self.users:
             for key, item in self.users.items():
                 if (
                     item["weight_template"]["min"]
@@ -56,68 +56,36 @@ class MiscaleWorker(BaseWorker):
                     user = key
                     sex = item["sex"]
                     height = item["height"]
-                    age = self.getAge(item["dob"])
+                    age = self.get_age(item["dob"])
 
-                    lib = bodyMetrics(results.weight, results.unit, height, age, sex, 0)
-                    metrics = {
-                        "weight": float("{:.2f}".format(results.weight)),
-                        "bmi": float("{:.2f}".format(lib.getBMI())),
-                        "basal_metabolism": float("{:.2f}".format(lib.getBMR())),
-                        "visceral_fat": float("{:.2f}".format(lib.getVisceralFat())),
-                        "user": user,
-                        "age": age,
-                        "sex": sex,
-                        "ideal_weight": float("{:.2f}".format(lib.getIdealWeight())),
-                        "ideal_weight_scale": lib.getIdealWeightScale(),
-                        "bmi_scale": lib.getBMIScale(),
-                        "basal_metabolism_scale": lib.getBMRScale(),
-                        "visceral_fat_scale": lib.getVisceralFatScale(),
-                    }
+                    metrics = BodyMetrics(
+                        results.weight,
+                        results.unit,
+                        height,
+                        age,
+                        sex,
+                        results.impedance,
+                    )
+                    metrics_dict = metrics.get_metrics_dict()
+                    metrics_dict["user"] = user
 
-                    if results.impedance:
-                        lib = bodyMetrics(
-                            results.weight,
-                            results.unit,
-                            height,
-                            age,
-                            sex,
-                            int(results.impedance),
-                        )
-                        metrics["impedance"] = results.impedance
-                        metrics["lean_body_mass"] = float(
-                            "{:.2f}".format(lib.getLBMCoefficient())
-                        )
-                        metrics["body_fat"] = float(
-                            "{:.2f}".format(lib.getFatPercentage())
-                        )
-                        metrics["body_fat_scale"] = lib.getFatPercentageScale()
-                        metrics["water"] = float(
-                            "{:.2f}".format(lib.getWaterPercentage())
-                        )
-                        metrics["water_scale"] = lib.getWaterPercentageScale()
-                        metrics["bone_mass"] = float("{:.2f}".format(lib.getBoneMass()))
-                        metrics["bone_mass_scale"] = lib.getBoneMassScale()
-                        metrics["muscle_mass"] = float(
-                            "{:.2f}".format(lib.getMuscleMass())
-                        )
-                        metrics["muscle_mass_scale"] = lib.getMuscleMassScale()
-                        metrics["protein"] = float(
-                            "{:.2f}".format(lib.getProteinPercentage())
-                        )
-                        metrics["protein_scale"] = lib.getProteinPercentageScale()
-                        metrics["body_type"] = lib.getBodyTypeScale()[lib.getBodyType()]
-                        metrics["fat_mass_to_ideal"] = lib.getFatMassToIdeal()
-
-                    if results.midatetime:
-                        metrics["timestamp"] = results.midatetime
+                    if results.mi_datetime:
+                        metrics_dict["timestamp"] = results.mi_datetime
 
                     messages.append(
                         MqttMessage(
-                            topic=self.format_topic("users/" + user), payload=metrics
+                            topic=self.format_topic(f"users/{user}"),
+                            payload=metrics_dict,
                         )
                     )
 
         return messages
+
+    @staticmethod
+    def get_age(d1):
+        d1 = datetime.strptime(str(d1), "%Y-%m-%d")
+        d2 = datetime.strptime(datetime.today().strftime("%Y-%m-%d"), "%Y-%m-%d")
+        return abs((d2 - d1).days) / 365
 
     def _get_data(self):
         from bluepy import btle
@@ -138,8 +106,6 @@ class MiscaleWorker(BaseWorker):
                 time.sleep(1)
             return scan_processor.results
 
-        return scan_processor.results
-
 
 class ScanProcessor:
     def __init__(self, mac):
@@ -153,15 +119,15 @@ class ScanProcessor:
 
                 # Xiaomi Scale V1
                 if data.startswith("1d18") and sdid == 22:
-                    measunit = data[4:6]
+                    measurement_unit = data[4:6]
                     measured = int((data[8:10] + data[6:8]), 16) * 0.01
                     unit = ""
 
-                    if measunit.startswith(("03", "b3")):
+                    if measurement_unit.startswith(("03", "b3")):
                         unit = "lbs"
-                    elif measunit.startswith(("12", "b2")):
+                    elif measurement_unit.startswith(("12", "b2")):
                         unit = "jin"
-                    elif measunit.startswith(("22", "a2")):
+                    elif measurement_unit.startswith(("22", "a2")):
                         unit = "kg"
                         measured = measured / 2
 
@@ -172,28 +138,22 @@ class ScanProcessor:
 
                 # Xiaomi Scale V2
                 if data.startswith("1b18") and sdid == 22:
-                    measunit = data[4:6]
+                    measurement_unit = data[4:6]
                     measured = int((data[28:30] + data[26:28]), 16) * 0.01
                     unit = ""
 
-                    if measunit == "03":
+                    if measurement_unit == "03":
                         unit = "lbs"
-                    elif measunit == "02":
+                    elif measurement_unit == "02":
                         unit = "kg"
                         measured = measured / 2
 
-                    midatetime = datetime.strptime(
-                        str(int((data[10:12] + data[8:10]), 16))
-                        + " "
-                        + str(int((data[12:14]), 16))
-                        + " "
-                        + str(int((data[14:16]), 16))
-                        + " "
-                        + str(int((data[16:18]), 16))
-                        + " "
-                        + str(int((data[18:20]), 16))
-                        + " "
-                        + str(int((data[20:22]), 16)),
+                    mi_datetime = datetime.strptime(
+                        (
+                            f"{int((data[10:12] + data[8:10]), 16)} {int((data[12:14]), 16)} "
+                            f"{int((data[14:16]), 16)} {int((data[16:18]), 16)} "
+                            f"{int((data[18:20]), 16)} {int((data[20:22]), 16)}"
+                        ),
                         "%Y %m %d %H %M %S",
                     )
 
@@ -202,7 +162,7 @@ class ScanProcessor:
                     self.results.impedance = int(data[22:24], 16)
                     if data[24:26] != "ff":
                         self.results.impedance += int(data[24:26], 16)
-                    self.results.midatetime = str(midatetime)
+                    self.results.mi_datetime = str(mi_datetime)
 
                     self.ready = True
 
@@ -223,47 +183,7 @@ class ScanProcessor:
         return self._results
 
 
-class MiWeightScaleData:
-    def __init__(self):
-        self._weight = None
-        self._unit = None
-        self._midatetime = None
-        self._impedance = None
-
-    @property
-    def weight(self):
-        return self._weight
-
-    @weight.setter
-    def weight(self, var):
-        self._weight = var
-
-    @property
-    def unit(self):
-        return self._unit
-
-    @unit.setter
-    def unit(self, var):
-        self._unit = var
-
-    @property
-    def midatetime(self):
-        return self._midatetime
-
-    @midatetime.setter
-    def midatetime(self, var):
-        self._midatetime = var
-
-    @property
-    def impedance(self):
-        return self._impedance
-
-    @impedance.setter
-    def impedance(self, var):
-        self._impedance = var
-
-
-class bodyMetrics:
+class BodyMetrics:
     def __init__(self, weight, unit, height, age, sex, impedance):
         # Calculations need weight to be in kg, check unit and convert to kg if needed
         if unit == "lbs":
@@ -277,18 +197,19 @@ class bodyMetrics:
 
         # Check for potential out of boundaries
         if self.height > 220:
-            raise Exception("Height is too high (limit: >220cm)")
+            raise ValueError("Height is too high (limit: >220cm)")
         elif weight < 10 or weight > 200:
-            raise Exception(
+            raise ValueError(
                 "Weight is either too low or too high (limits: <10kg and >200kg)"
             )
         elif age > 99:
-            raise Exception("Age is too high (limit >99 years)")
+            raise ValueError("Age is too high (limit >99 years)")
         elif impedance > 3000:
-            raise Exception("Impedance is too high (limit >3000ohm)")
+            raise ValueError("Impedance is too high (limit >3000ohm)")
 
     # Set the value to a boundary if it overflows
-    def checkValueOverflow(self, value, minimum, maximum):
+    @staticmethod
+    def check_value_overflow(value, minimum, maximum):
         if value < minimum:
             return minimum
         elif value > maximum:
@@ -297,14 +218,14 @@ class bodyMetrics:
             return value
 
     # Get LBM coefficient (with impedance)
-    def getLBMCoefficient(self):
+    def get_lbm_coefficient(self):
         lbm = (self.height * 9.058 / 100) * (self.height / 100)
         lbm += self.weight * 0.32 + 12.226
         lbm -= self.impedance * 0.0068
         lbm -= self.age * 0.0542
         return lbm
 
-    def getBMR(self):
+    def get_bmr(self):
         if self.sex == "female":
             bmr = 864.6 + self.weight * 10.2036
             bmr -= self.height * 0.39336
@@ -319,9 +240,9 @@ class bodyMetrics:
             bmr = 5000
         elif self.sex == "male" and bmr > 2322:
             bmr = 5000
-        return self.checkValueOverflow(bmr, 500, 10000)
+        return self.check_value_overflow(bmr, 500, 10000)
 
-    def getBMRScale(self):
+    def get_bmr_scale(self):
         coefficients = {
             "female": {12: 34, 15: 29, 17: 24, 29: 22, 50: 20, 120: 19},
             "male": {12: 36, 15: 30, 17: 26, 29: 23, 50: 21, 120: 20},
@@ -330,9 +251,8 @@ class bodyMetrics:
         for age, coefficient in coefficients[self.sex].items():
             if self.age < age:
                 return [self.weight * coefficient]
-                break
 
-    def getFatPercentage(self):
+    def get_fat_percentage(self):
         # Set a constant to remove from LBM
         if self.sex == "female" and self.age <= 49:
             const = 9.25
@@ -342,7 +262,7 @@ class bodyMetrics:
             const = 0.8
 
         # Calculate body fat percentage
-        LBM = self.getLBMCoefficient()
+        lbm = self.get_lbm_coefficient()
 
         if self.sex == "male" and self.weight < 61:
             coefficient = 0.98
@@ -356,56 +276,56 @@ class bodyMetrics:
                 coefficient *= 1.03
         else:
             coefficient = 1.0
-        fatPercentage = (1.0 - (((LBM - const) * coefficient) / self.weight)) * 100
+        fat_percentage = (1.0 - (((lbm - const) * coefficient) / self.weight)) * 100
 
         # Capping body fat percentage
-        if fatPercentage > 63:
-            fatPercentage = 75
-        return self.checkValueOverflow(fatPercentage, 5, 75)
+        if fat_percentage > 63:
+            fat_percentage = 75
+        return self.check_value_overflow(fat_percentage, 5, 75)
 
-    def getFatPercentageScale(self):
+    def get_fat_percentage_scale(self):
         # The included tables where quite strange, maybe bogus, replaced them with better ones...
         scales = [
-            {"min": 0, "max": 20, "female": [18, 23, 30, 35], "male": [8, 14, 21, 25]},
+            {"min": 0, "max": 21, "female": [18, 23, 30, 35], "male": [8, 14, 21, 25]},
             {
                 "min": 21,
-                "max": 25,
+                "max": 26,
                 "female": [19, 24, 30, 35],
                 "male": [10, 15, 22, 26],
             },
             {
                 "min": 26,
-                "max": 30,
+                "max": 31,
                 "female": [20, 25, 31, 36],
                 "male": [11, 16, 21, 27],
             },
             {
                 "min": 31,
-                "max": 35,
+                "max": 36,
                 "female": [21, 26, 33, 36],
                 "male": [13, 17, 25, 28],
             },
             {
-                "min": 46,
-                "max": 40,
+                "min": 36,
+                "max": 41,
                 "female": [22, 27, 34, 37],
                 "male": [15, 20, 26, 29],
             },
             {
                 "min": 41,
-                "max": 45,
+                "max": 46,
                 "female": [23, 28, 35, 38],
                 "male": [16, 22, 27, 30],
             },
             {
                 "min": 46,
-                "max": 50,
+                "max": 51,
                 "female": [24, 30, 36, 38],
                 "male": [17, 23, 29, 31],
             },
             {
                 "min": 51,
-                "max": 55,
+                "max": 56,
                 "female": [26, 31, 36, 39],
                 "male": [19, 25, 30, 33],
             },
@@ -418,49 +338,52 @@ class bodyMetrics:
         ]
 
         for scale in scales:
-            if self.age >= scale["min"] and self.age <= scale["max"]:
+            if scale["min"] <= self.age < scale["max"]:
                 return scale[self.sex]
-        return scales[0][self.sex]
 
-    def getWaterPercentage(self):
-        waterPercentage = (100 - self.getFatPercentage()) * 0.7
+        raise AttributeError(
+            f"Corresponding fat percentage scale not found for age {self.age} and gender {self.sex}"
+        )
 
-        if waterPercentage <= 50:
+    def get_water_percentage(self):
+        water_percentage = (100 - self.get_fat_percentage()) * 0.7
+
+        if water_percentage <= 50:
             coefficient = 1.02
         else:
             coefficient = 0.98
 
         # Capping water percentage
-        if waterPercentage * coefficient >= 65:
-            waterPercentage = 75
-        return self.checkValueOverflow(waterPercentage * coefficient, 35, 75)
+        if water_percentage * coefficient >= 65:
+            water_percentage = 75
+        return self.check_value_overflow(water_percentage * coefficient, 35, 75)
 
-    def getWaterPercentageScale(self):
+    def get_water_percentage_scale(self):
         if self.sex == "female":
             return [45, 60]
         return [55, 65]
 
-    def getBoneMass(self):
+    def get_bone_mass(self):
         if self.sex == "female":
             base = 0.245691014
         else:
             base = 0.18016894
 
-        boneMass = (base - (self.getLBMCoefficient() * 0.05158)) * -1
+        bone_mass = (base - (self.get_lbm_coefficient() * 0.05158)) * -1
 
-        if boneMass > 2.2:
-            boneMass += 0.1
+        if bone_mass > 2.2:
+            bone_mass += 0.1
         else:
-            boneMass -= 0.1
+            bone_mass -= 0.1
 
-        # Capping boneMass
-        if self.sex == "female" and boneMass > 5.1:
-            boneMass = 8
-        elif self.sex == "male" and boneMass > 5.2:
-            boneMass = 8
-        return self.checkValueOverflow(boneMass, 0.5, 8)
+        # Capping bone_mass
+        if self.sex == "female" and bone_mass > 5.1:
+            bone_mass = 8
+        elif self.sex == "male" and bone_mass > 5.2:
+            bone_mass = 8
+        return self.check_value_overflow(bone_mass, 0.5, 8)
 
-    def getBoneMassScale(self):
+    def get_bone_mass_scale(self):
         scales = [
             {
                 "female": {"min": 60, "optimal": 2.5},
@@ -477,22 +400,22 @@ class bodyMetrics:
             if self.weight >= scale[self.sex]["min"]:
                 return [scale[self.sex]["optimal"] - 1, scale[self.sex]["optimal"] + 1]
 
-    def getMuscleMass(self):
-        muscleMass = (
+    def get_muscle_mass(self):
+        muscle_mass = (
             self.weight
-            - ((self.getFatPercentage() * 0.01) * self.weight)
-            - self.getBoneMass()
+            - ((self.get_fat_percentage() * 0.01) * self.weight)
+            - self.get_bone_mass()
         )
 
         # Capping muscle mass
-        if self.sex == "female" and muscleMass >= 84:
-            muscleMass = 120
-        elif self.sex == "male" and muscleMass >= 93.5:
-            muscleMass = 120
+        if self.sex == "female" and muscle_mass >= 84:
+            muscle_mass = 120
+        elif self.sex == "male" and muscle_mass >= 93.5:
+            muscle_mass = 120
 
-        return self.checkValueOverflow(muscleMass, 10, 120)
+        return self.check_value_overflow(muscle_mass, 10, 120)
 
-    def getMuscleMassScale(self):
+    def get_muscle_mass_scale(self):
         scales = [
             {"min": 170, "female": [36.5, 42.5], "male": [49.5, 59.4]},
             {"min": 160, "female": [32.9, 37.5], "male": [44.0, 52.4]},
@@ -503,7 +426,7 @@ class bodyMetrics:
             if self.height >= scale["min"]:
                 return scale[self.sex]
 
-    def getVisceralFat(self):
+    def get_visceral_fat(self):
         if self.sex == "female":
             if self.weight > (13 - (self.height * 0.5)) * -1:
                 subsubcalc = (
@@ -532,79 +455,140 @@ class bodyMetrics:
                     - 5.0
                 )
 
-        return self.checkValueOverflow(vfal, 1, 50)
+        return self.check_value_overflow(vfal, 1, 50)
 
-    def getVisceralFatScale(self):
+    @staticmethod
+    def get_visceral_fat_scale():
         return [10, 15]
 
-    def getBMI(self):
-        return self.checkValueOverflow(
+    def get_bmi(self):
+        return self.check_value_overflow(
             self.weight / ((self.height / 100) * (self.height / 100)), 10, 90
         )
 
-    def getBMIScale(self):
+    @staticmethod
+    def get_bmi_scale():
         # Replaced library's version by mi fit scale, it seems better
         return [18.5, 25, 28, 32]
 
     # Get ideal weight (just doing a reverse BMI, should be something better)
-    def getIdealWeight(self):
-        return self.checkValueOverflow(
+    def get_ideal_weight(self):
+        return self.check_value_overflow(
             (22 * self.height) * self.height / 10000, 5.5, 198
         )
 
     # Get ideal weight scale (BMI scale converted to weights)
-    def getIdealWeightScale(self):
+    def get_ideal_weight_scale(self):
         scale = []
-        for bmiScale in self.getBMIScale():
+        for bmiScale in self.get_bmi_scale():
             scale.append((bmiScale * self.height) * self.height / 10000)
         return scale
 
     # Get fat mass to ideal (guessing mi fit formula)
-    def getFatMassToIdeal(self):
-        mass = (self.weight * (self.getFatPercentage() / 100)) - (
-            self.weight * (self.getFatPercentageScale()[2] / 100)
+    def get_fat_mass_to_ideal(self):
+        mass = (self.weight * (self.get_fat_percentage() / 100)) - (
+            self.weight * (self.get_fat_percentage_scale()[2] / 100)
         )
         if mass < 0:
-            return {"type": "to_gain", "mass": mass * -1}
+            return {"type": "to_gain", "mass": round(mass, 2) * -1}
         else:
-            return {"type": "to_lose", "mass": mass}
+            return {"type": "to_lose", "mass": round(mass, 2)}
 
-    # Get protetin percentage (warn: guessed formula)
-    def getProteinPercentage(self):
-        proteinPercentage = 100 - (floor(self.getFatPercentage() * 100) / 100)
-        proteinPercentage -= floor(self.getWaterPercentage() * 100) / 100
-        proteinPercentage -= floor((self.getBoneMass() / self.weight * 100) * 100) / 100
-        return proteinPercentage
+    # Get protein percentage (warn: guessed formula)
+    def get_protein_percentage(self):
+        protein_percentage = 100 - (floor(self.get_fat_percentage() * 100) / 100)
+        protein_percentage -= floor(self.get_water_percentage() * 100) / 100
+        protein_percentage -= (
+            floor((self.get_bone_mass() / self.weight * 100) * 100) / 100
+        )
+        return protein_percentage
 
     # Get protein scale (hardcoded in mi fit)
-    def getProteinPercentageScale(self):
+    @staticmethod
+    def get_protein_percentage_scale():
         return [16, 20]
 
     # Get body type (out of nine possible)
-    def getBodyType(self):
-        if self.getFatPercentage() > self.getFatPercentageScale()[2]:
+    def get_body_type(self):
+        if self.get_fat_percentage() > self.get_fat_percentage_scale()[2]:
             factor = 0
-        elif self.getFatPercentage() < self.getFatPercentageScale()[1]:
+        elif self.get_fat_percentage() < self.get_fat_percentage_scale()[1]:
             factor = 2
         else:
             factor = 1
 
-        if self.getMuscleMass() > self.getMuscleMassScale()[1]:
+        if self.get_muscle_mass() > self.get_muscle_mass_scale()[1]:
             return 2 + (factor * 3)
-        elif self.getMuscleMass() < self.getMuscleMassScale()[0]:
+        elif self.get_muscle_mass() < self.get_muscle_mass_scale()[0]:
             return factor * 3
         else:
             return 1 + (factor * 3)
 
-    def getBodyTypeScale(self):
+    @staticmethod
+    def get_body_type_scale():
         return [
             "obese",
             "overweight",
             "thick-set",
-            "lack-exerscise",
+            "lack-exercise",
             "balanced",
             "balanced-muscular",
             "skinny",
             "balanced-skinny",
             "skinny-muscular",
         ]
+
+    def get_metrics_dict(self):
+        metrics = {
+            "weight": round(self.weight, 2),
+            "bmi": round(self.get_bmi(), 2),
+            "basal_metabolism": round(self.get_bmr(), 2),
+            "visceral_fat": round(self.get_visceral_fat(), 2),
+            "age": round(self.age, 2),
+            "sex": self.sex,
+            "ideal_weight": round(self.get_ideal_weight(), 2),
+            "ideal_weight_scale": self._round_elements(self.get_ideal_weight_scale()),
+            "bmi_scale": self._round_elements(self.get_bmi_scale()),
+            "basal_metabolism_scale": self._round_elements(self.get_bmr_scale()),
+            "visceral_fat_scale": self._round_elements(self.get_visceral_fat_scale()),
+        }
+
+        if self.impedance:
+            metrics["impedance"] = round(self.impedance, 2)
+            metrics["lean_body_mass"] = round(self.get_lbm_coefficient(), 2)
+            metrics["body_fat"] = round(self.get_fat_percentage(), 2)
+            metrics["body_fat_scale"] = self._round_elements(
+                self.get_fat_percentage_scale()
+            )
+            metrics["water"] = round(self.get_water_percentage(), 2)
+            metrics["water_scale"] = self._round_elements(
+                self.get_water_percentage_scale()
+            )
+            metrics["bone_mass"] = round(self.get_bone_mass(), 2)
+            metrics["bone_mass_scale"] = self._round_elements(
+                self.get_bone_mass_scale()
+            )
+            metrics["muscle_mass"] = round(self.get_muscle_mass(), 2)
+            metrics["muscle_mass_scale"] = self._round_elements(
+                self.get_muscle_mass_scale()
+            )
+            metrics["protein"] = round(self.get_protein_percentage(), 2)
+            metrics["protein_scale"] = self._round_elements(
+                self.get_protein_percentage_scale()
+            )
+            metrics["body_type"] = self.get_body_type_scale()[self.get_body_type()]
+            metrics["fat_mass_to_ideal"] = self.get_fat_mass_to_ideal()
+
+        return metrics
+
+    @staticmethod
+    def _round_elements(array, decimals=2):
+        return [round(elem, decimals) for elem in array]
+
+
+class MiWeightScaleData:
+    def __init__(self):
+        self.weight = None
+        self.unit = None
+        self.mi_datetime = None
+        self.impedance = None
