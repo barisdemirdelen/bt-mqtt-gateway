@@ -119,7 +119,7 @@ class ScanProcessor:
                 # Xiaomi Scale V1
                 if data.startswith("1d18") and sdid == 22:
                     measurement_unit = data[4:6]
-                    measured = int((data[8:10] + data[6:8]), 16) * 0.01
+                    weight = int((data[8:10] + data[6:8]), 16) * 0.01
                     unit = ""
 
                     if measurement_unit.startswith(("03", "b3")):
@@ -128,9 +128,9 @@ class ScanProcessor:
                         unit = "jin"
                     elif measurement_unit.startswith(("22", "a2")):
                         unit = "kg"
-                        measured = measured / 2
+                        weight = weight / 2
 
-                    self.results.weight = round(measured, 2)
+                    self.results.weight = round(weight, 2)
                     self.results.unit = unit
 
                     self.ready = True
@@ -138,8 +138,6 @@ class ScanProcessor:
                 # Xiaomi Scale V2
                 if data.startswith("1b18") and sdid == 22:
                     measurement_unit = data[4:6]
-                    measured = int((data[28:30] + data[26:28]), 16) * 0.01
-                    unit = ""
 
                     ctrl_byte1 = bytes.fromhex(data[4:])[1]
                     has_impedance = ctrl_byte1 & (1 << 1)
@@ -148,11 +146,14 @@ class ScanProcessor:
                     if not is_stabilized:
                         continue
 
+                    weight = int((data[28:30] + data[26:28]), 16) * 0.01
+
+                    unit = ""
                     if measurement_unit == "03":
                         unit = "lbs"
                     elif measurement_unit == "02":
                         unit = "kg"
-                        measured = measured / 2
+                        weight = weight / 2
 
                     mi_datetime = datetime.strptime(
                         (
@@ -163,7 +164,7 @@ class ScanProcessor:
                         "%Y %m %d %H %M %S",
                     )
 
-                    self.results.weight = round(measured, 2)
+                    self.results.weight = round(weight, 2)
                     self.results.unit = unit
 
                     if has_impedance:
