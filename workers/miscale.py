@@ -141,6 +141,13 @@ class ScanProcessor:
                     measured = int((data[28:30] + data[26:28]), 16) * 0.01
                     unit = ""
 
+                    ctrl_byte1 = bytes.fromhex(data[4:])[1]
+                    has_impedance = ctrl_byte1 & (1 << 1)
+                    is_stabilized = ctrl_byte1 & (1 << 5)
+
+                    if not is_stabilized:
+                        continue
+
                     if measurement_unit == "03":
                         unit = "lbs"
                     elif measurement_unit == "02":
@@ -158,9 +165,11 @@ class ScanProcessor:
 
                     self.results.weight = round(measured, 2)
                     self.results.unit = unit
-                    self.results.impedance = int(data[22:24], 16)
-                    if data[24:26] != "ff":
-                        self.results.impedance += int(data[24:26], 16)
+
+                    if has_impedance:
+                        self.results.impedance = str(
+                            int((data[24:26] + data[22:24]), 16)
+                        )
                     self.results.mi_datetime = str(mi_datetime)
 
                     self.ready = True
@@ -234,12 +243,7 @@ class BodyMetrics:
             bmr -= self.height * 0.726
             bmr -= self.age * 8.976
 
-        # Capping
-        if self.sex == "female" and bmr > 2996:
-            bmr = 5000
-        elif self.sex == "male" and bmr > 2322:
-            bmr = 5000
-        return self.check_value_overflow(bmr, 500, 10000)
+        return self.check_value_overflow(bmr, 500, 3500)
 
     def get_bmr_scale(self):
         coefficients = {
@@ -252,7 +256,7 @@ class BodyMetrics:
                 return [self.weight * coefficient]
 
     def get_fat_percentage(self):
-        # Set a constant to remove from LBM
+        # Set a constant to remove from lbm
         if self.sex == "female" and self.age <= 49:
             const = 9.25
         elif self.sex == "female" and self.age > 49:
@@ -277,10 +281,8 @@ class BodyMetrics:
             coefficient = 1.0
         fat_percentage = (1.0 - (((lbm - const) * coefficient) / self.weight)) * 100
 
-        # Capping body fat percentage
-        if fat_percentage > 63:
-            fat_percentage = 75
-        return self.check_value_overflow(fat_percentage, 5, 75)
+        fat_percentage = self.check_value_overflow(fat_percentage, 5, 75)
+        return fat_percentage
 
     def get_fat_percentage_scale(self):
         # The included tables where quite strange, maybe bogus, replaced them with better ones...
@@ -352,9 +354,6 @@ class BodyMetrics:
         else:
             coefficient = 0.98
 
-        # Capping water percentage
-        if water_percentage * coefficient >= 65:
-            water_percentage = 75
         return self.check_value_overflow(water_percentage * coefficient, 35, 75)
 
     def get_water_percentage_scale(self):
@@ -375,11 +374,6 @@ class BodyMetrics:
         else:
             bone_mass -= 0.1
 
-        # Capping bone_mass
-        if self.sex == "female" and bone_mass > 5.1:
-            bone_mass = 8
-        elif self.sex == "male" and bone_mass > 5.2:
-            bone_mass = 8
         return self.check_value_overflow(bone_mass, 0.5, 8)
 
     def get_bone_mass_scale(self):
@@ -405,12 +399,6 @@ class BodyMetrics:
             - ((self.get_fat_percentage() * 0.01) * self.weight)
             - self.get_bone_mass()
         )
-
-        # Capping muscle mass
-        if self.sex == "female" and muscle_mass >= 84:
-            muscle_mass = 120
-        elif self.sex == "male" and muscle_mass >= 93.5:
-            muscle_mass = 120
 
         return self.check_value_overflow(muscle_mass, 10, 120)
 
