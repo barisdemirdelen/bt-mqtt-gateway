@@ -559,7 +559,7 @@ class BodyMetrics:
 
         if self.impedance:
             metrics["impedance"] = round(self.impedance, 2)
-            metrics["lean_body_mass"] = round(self.get_lbm_coefficient(), 2)
+            metrics["lean_body_mass"] = round(self.get_lean_body_mass(), 2)
             metrics["body_fat"] = round(self.get_fat_percentage(), 2)
             metrics["body_fat_scale"] = self._round_elements(
                 self.get_fat_percentage_scale()
