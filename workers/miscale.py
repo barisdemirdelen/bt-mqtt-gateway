@@ -168,9 +168,7 @@ class ScanProcessor:
                     self.results.unit = unit
 
                     if has_impedance:
-                        self.results.impedance = str(
-                            int((data[24:26] + data[22:24]), 16)
-                        )
+                        self.results.impedance = int((data[24:26] + data[22:24]), 16)
                     self.results.mi_datetime = str(mi_datetime)
 
                     self.ready = True
