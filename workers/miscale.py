@@ -14,6 +14,9 @@ REQUIREMENTS = ["bluepy"]
 # Bluepy might need special settings
 # sudo setcap 'cap_net_raw,cap_net_admin+eip' /usr/local/lib/python3.6/dist-packages/bluepy/bluepy-helper
 
+female = "female"
+male = "male"
+
 
 class MiscaleWorker(BaseWorker):
 
@@ -205,14 +208,16 @@ class BodyMetrics:
         # Check for potential out of boundaries
         if self.height > 220:
             raise ValueError("Height is too high (limit: >220cm)")
-        elif weight < 10 or weight > 200:
+        if weight < 10 or weight > 200:
             raise ValueError(
                 "Weight is either too low or too high (limits: <10kg and >200kg)"
             )
-        elif age > 99:
+        if age > 99:
             raise ValueError("Age is too high (limit >99 years)")
-        elif impedance and impedance > 3000:
+        if impedance and impedance > 3000:
             raise ValueError("Impedance is too high (limit >3000ohm)")
+        if sex not in [male, female]:
+            raise ValueError("Sex can only be male or female")
 
     # Set the value to a boundary if it overflows
     @staticmethod
@@ -234,18 +239,18 @@ class BodyMetrics:
         :return: lean body mass
         """
         resistance, reactance = self.calculate_resistance_reactance()
-        male = 1 if self.sex == "male" else 0
+        is_male = 1 if self.sex == male else 0
         lean_body_mass = (
             -4.104
             + 0.518 * self.height ** 2 / resistance
             + 0.231 * self.weight
             + 0.13 * reactance
-            + 4.229 * male
+            + 4.229 * is_male
         )
         return lean_body_mass
 
     def get_bmr(self):
-        if self.sex == "female":
+        if self.sex == female:
             bmr = 864.6 + self.weight * 10.2036
             bmr -= self.height * 0.39336
             bmr -= self.age * 6.204
@@ -258,8 +263,8 @@ class BodyMetrics:
 
     def get_bmr_scale(self):
         coefficients = {
-            "female": {12: 34, 15: 29, 17: 24, 29: 22, 50: 20, 120: 19},
-            "male": {12: 36, 15: 30, 17: 26, 29: 23, 50: 21, 120: 20},
+            female: {12: 34, 15: 29, 17: 24, 29: 22, 50: 20, 120: 19},
+            male: {12: 36, 15: 30, 17: 26, 29: 23, 50: 21, 120: 20},
         }
 
         for age, coefficient in coefficients[self.sex].items():
@@ -273,55 +278,15 @@ class BodyMetrics:
     def get_fat_percentage_scale(self):
         # The included tables where quite strange, maybe bogus, replaced them with better ones...
         scales = [
-            {"min": 0, "max": 21, "female": [18, 23, 30, 35], "male": [8, 14, 21, 25]},
-            {
-                "min": 21,
-                "max": 26,
-                "female": [19, 24, 30, 35],
-                "male": [10, 15, 22, 26],
-            },
-            {
-                "min": 26,
-                "max": 31,
-                "female": [20, 25, 31, 36],
-                "male": [11, 16, 21, 27],
-            },
-            {
-                "min": 31,
-                "max": 36,
-                "female": [21, 26, 33, 36],
-                "male": [13, 17, 25, 28],
-            },
-            {
-                "min": 36,
-                "max": 41,
-                "female": [22, 27, 34, 37],
-                "male": [15, 20, 26, 29],
-            },
-            {
-                "min": 41,
-                "max": 46,
-                "female": [23, 28, 35, 38],
-                "male": [16, 22, 27, 30],
-            },
-            {
-                "min": 46,
-                "max": 51,
-                "female": [24, 30, 36, 38],
-                "male": [17, 23, 29, 31],
-            },
-            {
-                "min": 51,
-                "max": 56,
-                "female": [26, 31, 36, 39],
-                "male": [19, 25, 30, 33],
-            },
-            {
-                "min": 56,
-                "max": 100,
-                "female": [27, 32, 37, 40],
-                "male": [21, 26, 31, 34],
-            },
+            {"min": 0, "max": 21, female: [18, 23, 30, 35], male: [8, 14, 21, 25]},
+            {"min": 21, "max": 26, female: [19, 24, 30, 35], male: [10, 15, 22, 26]},
+            {"min": 26, "max": 31, female: [20, 25, 31, 36], male: [11, 16, 21, 27]},
+            {"min": 31, "max": 36, female: [21, 26, 33, 36], male: [13, 17, 25, 28]},
+            {"min": 36, "max": 41, female: [22, 27, 34, 37], male: [15, 20, 26, 29]},
+            {"min": 41, "max": 46, female: [23, 28, 35, 38], male: [16, 22, 27, 30]},
+            {"min": 46, "max": 51, female: [24, 30, 36, 38], male: [17, 23, 29, 31]},
+            {"min": 51, "max": 56, female: [26, 31, 36, 39], male: [19, 25, 30, 33]},
+            {"min": 56, "max": 100, female: [27, 32, 37, 40], male: [21, 26, 31, 34]},
         ]
 
         for scale in scales:
@@ -343,12 +308,12 @@ class BodyMetrics:
         return self.check_value_overflow(water_percentage * coefficient, 35, 75)
 
     def get_water_percentage_scale(self):
-        if self.sex == "female":
+        if self.sex == female:
             return [45, 60]
         return [55, 65]
 
     def get_bone_mass(self):
-        if self.sex == "female":
+        if self.sex == female:
             base = 0.245691014
         else:
             base = 0.18016894
@@ -364,15 +329,9 @@ class BodyMetrics:
 
     def get_bone_mass_scale(self):
         scales = [
-            {
-                "female": {"min": 60, "optimal": 2.5},
-                "male": {"min": 75, "optimal": 3.2},
-            },
-            {
-                "female": {"min": 45, "optimal": 2.2},
-                "male": {"min": 69, "optimal": 2.9},
-            },
-            {"female": {"min": 0, "optimal": 1.8}, "male": {"min": 0, "optimal": 2.5}},
+            {female: {"min": 60, "optimal": 2.5}, male: {"min": 75, "optimal": 3.2},},
+            {female: {"min": 45, "optimal": 2.2}, male: {"min": 69, "optimal": 2.9},},
+            {female: {"min": 0, "optimal": 1.8}, male: {"min": 0, "optimal": 2.5}},
         ]
 
         for scale in scales:
@@ -390,9 +349,9 @@ class BodyMetrics:
 
     def get_muscle_mass_scale(self):
         scales = [
-            {"min": 170, "female": [36.5, 42.5], "male": [49.5, 59.4]},
-            {"min": 160, "female": [32.9, 37.5], "male": [44.0, 52.4]},
-            {"min": 0, "female": [29.1, 34.7], "male": [38.5, 46.5]},
+            {"min": 170, female: [36.5, 42.5], male: [49.5, 59.4]},
+            {"min": 160, female: [32.9, 37.5], male: [44.0, 52.4]},
+            {"min": 0, female: [29.1, 34.7], male: [38.5, 46.5]},
         ]
 
         for scale in scales:
@@ -400,7 +359,7 @@ class BodyMetrics:
                 return scale[self.sex]
 
     def get_visceral_fat(self):
-        if self.sex == "female":
+        if self.sex == female:
             if self.weight > (13 - (self.height * 0.5)) * -1:
                 subsubcalc = (
                     (self.height * 1.45) + (self.height * 0.1158) * self.height
@@ -451,7 +410,7 @@ class BodyMetrics:
         else:
             group = len(ages)
 
-        if self.sex == "female":
+        if self.sex == female:
             return female_resistances[group], female_reactances[group]
         return male_resistances[group], male_reactances[group]
 
@@ -467,9 +426,7 @@ class BodyMetrics:
         return [10, 15]
 
     def get_bmi(self):
-        return self.check_value_overflow(
-            self.weight / ((self.height / 100) * (self.height / 100)), 10, 90
-        )
+        return self.weight / (self.height / 100) ** 2
 
     @staticmethod
     def get_bmi_scale():

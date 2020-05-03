@@ -42,3 +42,8 @@ def test_calculate_resistance_reactance():
 
     resistance, reactance = body_metrics.calculate_resistance_reactance()
     assert round((resistance ** 2 + reactance ** 2) ** 0.5, 2) == 500
+
+
+def test_bmi():
+    body_metrics = BodyMetrics(70, "kg", 180, 30, "male", 500)
+    assert round(body_metrics.get_bmi(), 2) == 21.60
