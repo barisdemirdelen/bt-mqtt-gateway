@@ -224,13 +224,25 @@ class BodyMetrics:
         else:
             return value
 
-    # Get LBM coefficient (with impedance)
-    def get_lbm_coefficient(self):
-        lbm = (self.height * 9.058 / 100) * (self.height / 100)
-        lbm += self.weight * 0.32 + 12.226
-        lbm -= self.impedance * 0.0068
-        lbm -= self.age * 0.0542
-        return lbm
+    def get_lean_body_mass(self):
+        """
+        Formula from Kyle et al.
+        Single prediction equation for bioelectrical impedance
+        analysis in adults aged 20–94 years
+        FFM = -4.104 + (0.518 x height2/resistance) + (0.231 x weight)
+         + (0.130 x reactance) + (4.229 x sex: men 1, women 0).
+        :return: lean body mass
+        """
+        resistance, reactance = self.calculate_resistance_reactance()
+        male = 1 if self.sex == "male" else 0
+        lean_body_mass = (
+            -4.104
+            + 0.518 * self.height / resistance
+            + 0.231 * self.weight
+            + 0.13 * reactance
+            + 4.229 * male
+        )
+        return lean_body_mass
 
     def get_bmr(self):
         if self.sex == "female":
@@ -255,33 +267,8 @@ class BodyMetrics:
                 return [self.weight * coefficient]
 
     def get_fat_percentage(self):
-        # Set a constant to remove from lbm
-        if self.sex == "female" and self.age <= 49:
-            const = 9.25
-        elif self.sex == "female" and self.age > 49:
-            const = 7.25
-        else:
-            const = 0.8
-
-        # Calculate body fat percentage
-        lbm = self.get_lbm_coefficient()
-
-        if self.sex == "male" and self.weight < 61:
-            coefficient = 0.98
-        elif self.sex == "female" and self.weight > 60:
-            coefficient = 0.96
-            if self.height > 160:
-                coefficient *= 1.03
-        elif self.sex == "female" and self.weight < 50:
-            coefficient = 1.02
-            if self.height > 160:
-                coefficient *= 1.03
-        else:
-            coefficient = 1.0
-        fat_percentage = (1.0 - (((lbm - const) * coefficient) / self.weight)) * 100
-
-        fat_percentage = self.check_value_overflow(fat_percentage, 5, 75)
-        return fat_percentage
+        lean_body_mass = self.get_lean_body_mass()
+        return lean_body_mass / self.weight
 
     def get_fat_percentage_scale(self):
         # The included tables where quite strange, maybe bogus, replaced them with better ones...
@@ -366,7 +353,7 @@ class BodyMetrics:
         else:
             base = 0.18016894
 
-        bone_mass = (base - (self.get_lbm_coefficient() * 0.05158)) * -1
+        bone_mass = (base - (self.get_lean_body_mass() * 0.05158)) * -1
 
         if bone_mass > 2.2:
             bone_mass += 0.1
@@ -442,6 +429,38 @@ class BodyMetrics:
                 )
 
         return self.check_value_overflow(vfal, 1, 50)
+
+    def get_mean_resistance_reactance(self):
+        """
+        Values are from Kyle et al.
+        Single prediction equation for bioelectrical impedance
+        analysis in adults aged 20–94 years
+        :return:
+        """
+
+        ages = [29, 39, 49, 59, 69, 79]
+        male_resistances = [463, 451, 447, 438, 456, 480, 470]
+        male_reactances = [63.9, 60.8, 58.0, 53.2, 50.3, 47.5, 41.3]
+        female_resistances = [559, 552, 545, 537, 554, 569, 569]
+        female_reactances = [70, 67.1, 64.6, 60.8, 56.6, 57.1, 50.3]
+
+        for i, age in enumerate(ages):
+            if self.age < age:
+                group = i
+                break
+        else:
+            group = len(ages)
+
+        if self.sex == "female":
+            return female_resistances[group], female_reactances[group]
+        return male_resistances[group], male_reactances[group]
+
+    def calculate_resistance_reactance(self):
+        mean_resistance, mean_reactance = self.get_mean_resistance_reactance()
+        factor = (
+            self.impedance ** 2 / (mean_resistance ** 2 + mean_reactance ** 2)
+        ) ** 0.5
+        return mean_resistance * factor, mean_reactance * factor
 
     @staticmethod
     def get_visceral_fat_scale():
