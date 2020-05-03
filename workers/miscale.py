@@ -237,7 +237,7 @@ class BodyMetrics:
         male = 1 if self.sex == "male" else 0
         lean_body_mass = (
             -4.104
-            + 0.518 * self.height / resistance
+            + 0.518 * self.height**2 / resistance
             + 0.231 * self.weight
             + 0.13 * reactance
             + 4.229 * male
@@ -268,7 +268,7 @@ class BodyMetrics:
 
     def get_fat_percentage(self):
         lean_body_mass = self.get_lean_body_mass()
-        return lean_body_mass / self.weight
+        return (self.weight - lean_body_mass) / self.weight * 100
 
     def get_fat_percentage_scale(self):
         # The included tables where quite strange, maybe bogus, replaced them with better ones...
