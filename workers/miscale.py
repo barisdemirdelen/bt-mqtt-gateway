@@ -213,7 +213,7 @@ class BodyMetrics:
             )
         elif age > 99:
             raise ValueError("Age is too high (limit >99 years)")
-        elif impedance > 3000:
+        elif impedance and impedance > 3000:
             raise ValueError("Impedance is too high (limit >3000ohm)")
 
     # Set the value to a boundary if it overflows
