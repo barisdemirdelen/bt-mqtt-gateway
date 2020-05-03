@@ -237,7 +237,7 @@ class BodyMetrics:
         male = 1 if self.sex == "male" else 0
         lean_body_mass = (
             -4.104
-            + 0.518 * self.height**2 / resistance
+            + 0.518 * self.height ** 2 / resistance
             + 0.231 * self.weight
             + 0.13 * reactance
             + 4.229 * male
