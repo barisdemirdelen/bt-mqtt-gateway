@@ -25,7 +25,7 @@ class MiscaleWorker(BaseWorker):
     def __init__(self, command_timeout, global_topic_prefix, **kwargs):
         self.mac = None
         self.users = None
-        self.retain = False
+        self.retain = True
         super().__init__(command_timeout, global_topic_prefix, **kwargs)
 
     def status_update(self):

@@ -137,7 +137,7 @@ class MqttClient:
 class MqttMessage:
     use_global_prefix = True
 
-    def __init__(self, topic=None, payload=None, retain=False):
+    def __init__(self, topic=None, payload=None, retain=True):
         self._topic = topic
         self._payload = payload
         self._retain = retain
@@ -187,5 +187,5 @@ class MqttConfigMessage(MqttMessage):
 
     use_global_prefix = False
 
-    def __init__(self, component, name, payload=None, retain=False):
+    def __init__(self, component, name, payload=None, retain=True):
         super().__init__("{}/{}/config".format(component, name), payload, retain)

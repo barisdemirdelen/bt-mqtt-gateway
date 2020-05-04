@@ -12,7 +12,7 @@ _LOGGER = logger.get(__name__)
 class ToothbrushWorker(BaseWorker):
     def __init__(self, command_timeout, global_topic_prefix, **kwargs):
         self.devices = None
-        self.retain = False
+        self.retain = True
         super().__init__(command_timeout, global_topic_prefix, **kwargs)
 
     def searchmac(self, devices, mac):
