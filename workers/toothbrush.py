@@ -10,6 +10,11 @@ _LOGGER = logger.get(__name__)
 
 
 class ToothbrushWorker(BaseWorker):
+    def __init__(self, command_timeout, global_topic_prefix, **kwargs):
+        self.devices = None
+        self.retain = False
+        super().__init__(command_timeout, global_topic_prefix, **kwargs)
+
     def searchmac(self, devices, mac):
         for dev in devices:
             if dev.addr == mac.lower():
@@ -37,7 +42,9 @@ class ToothbrushWorker(BaseWorker):
             if device is None:
                 ret.append(
                     MqttMessage(
-                        topic=self.format_topic(name + "/presence"), payload="0"
+                        topic=self.format_topic(name + "/presence"),
+                        payload="0",
+                        retain=self.retain,
                     )
                 )
             else:
@@ -45,39 +52,51 @@ class ToothbrushWorker(BaseWorker):
                     MqttMessage(
                         topic=self.format_topic(name + "/presence/rssi"),
                         payload=device.rssi,
+                        retain=self.retain,
                     )
                 )
                 ret.append(
                     MqttMessage(
-                        topic=self.format_topic(name + "/presence"), payload="1"
+                        topic=self.format_topic(name + "/presence"),
+                        payload="1",
+                        retain=self.retain,
                     )
                 )
                 _LOGGER.debug("text: %s" % device.getValueText(255))
                 bytes_ = bytearray(bytes.fromhex(device.getValueText(255)))
                 ret.append(
                     MqttMessage(
-                        topic=self.format_topic(name + "/running"), payload=bytes_[5]
+                        topic=self.format_topic(name + "/running"),
+                        payload=bytes_[5],
+                        retain=self.retain,
                     )
                 )
                 ret.append(
                     MqttMessage(
-                        topic=self.format_topic(name + "/pressure"), payload=bytes_[6]
+                        topic=self.format_topic(name + "/pressure"),
+                        payload=bytes_[6],
+                        retain=self.retain,
                     )
                 )
                 ret.append(
                     MqttMessage(
                         topic=self.format_topic(name + "/time"),
                         payload=bytes_[7] * 60 + bytes_[8],
+                        retain=self.retain,
                     )
                 )
                 ret.append(
                     MqttMessage(
-                        topic=self.format_topic(name + "/mode"), payload=bytes_[9]
+                        topic=self.format_topic(name + "/mode"),
+                        payload=bytes_[9],
+                        retain=self.retain,
                     )
                 )
                 ret.append(
                     MqttMessage(
-                        topic=self.format_topic(name + "/quadrant"), payload=bytes_[10]
+                        topic=self.format_topic(name + "/quadrant"),
+                        payload=bytes_[10],
+                        retain=self.retain,
                     )
                 )
 

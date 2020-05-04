@@ -25,6 +25,7 @@ class MiscaleWorker(BaseWorker):
     def __init__(self, command_timeout, global_topic_prefix, **kwargs):
         self.mac = None
         self.users = None
+        self.retain = False
         super().__init__(command_timeout, global_topic_prefix, **kwargs)
 
     def status_update(self):
@@ -34,18 +35,23 @@ class MiscaleWorker(BaseWorker):
             MqttMessage(
                 topic=self.format_topic("weight/" + results.unit),
                 payload=results.weight,
+                retain=self.retain,
             )
         ]
         if results.impedance:
             messages.append(
                 MqttMessage(
-                    topic=self.format_topic("impedance"), payload=results.impedance
+                    topic=self.format_topic("impedance"),
+                    payload=results.impedance,
+                    retain=self.retain,
                 )
             )
         if results.mi_datetime:
             messages.append(
                 MqttMessage(
-                    topic=self.format_topic("midatetime"), payload=results.mi_datetime
+                    topic=self.format_topic("midatetime"),
+                    payload=results.mi_datetime,
+                    retain=self.retain,
                 )
             )
 
@@ -78,6 +84,7 @@ class MiscaleWorker(BaseWorker):
                         MqttMessage(
                             topic=self.format_topic(f"users/{user}"),
                             payload=metrics_dict,
+                            retain=self.retain,
                         )
                     )
 
